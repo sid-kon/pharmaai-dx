@@ -5,13 +5,20 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import streamlit as st
 from langchain_core.messages import HumanMessage
 import base64
+from PIL import Image
 
 from agent.graph import pharmaai_graph, get_initial_state
 from agent.state import DIMENSIONS
+from scoring import calculate_readiness_score, get_score_band, get_initiative_profile
+
+try:
+    _page_icon = Image.open("agilisium_logo.jpeg")
+except Exception:
+    _page_icon = None
 
 st.set_page_config(
     page_title="PharmaAI Dx",
-    page_icon="🧬",
+    page_icon=_page_icon,
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -306,18 +313,150 @@ with st.sidebar:
             unsafe_allow_html=True
         )
     else:
-        st.markdown('<div class="sidebar-title">🧬 PharmaAI Dx</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-title">PharmaAI Dx</div>', unsafe_allow_html=True)
 
     st.markdown("**Diagnostic Progress**")
 
     scores = st.session_state.graph_state.get("dimension_scores", {})
     assessed_count = sum(1 for v in scores.values() if v != "Not assessed")
 
+    progress_pct = int((assessed_count / len(DIMENSIONS)) * 100)
     st.markdown(
-        f'<div class="progress-label">{assessed_count} of {len(DIMENSIONS)} dimensions assessed</div>',
+        f'<div class="progress-label">{assessed_count} of {len(DIMENSIONS)} dimensions assessed</div>'
+        f'<div style="background-color:#2a3245;border-radius:999px;height:8px;width:100%;margin-bottom:4px;overflow:hidden;">'
+        f'<div style="background-color:#4fc3f7;height:100%;width:{progress_pct}%;border-radius:999px;transition:width 0.4s ease;"></div>'
+        f'</div>',
         unsafe_allow_html=True,
     )
-    st.progress(assessed_count / len(DIMENSIONS))
+
+    # ── READINESS SCORE ──────────────────────────────────────────────
+    initiative_desc = st.session_state.graph_state.get("initiative_description", "")
+    readiness_score = calculate_readiness_score(scores, initiative_desc)
+    band_label, band_colour = get_score_band(readiness_score)
+    profile = get_initiative_profile(initiative_desc)
+
+    if readiness_score >= 80:
+        ring_colour = "#66bb6a"
+        glow_colour = "rgba(102,187,106,0.25)"
+    elif readiness_score >= 55:
+        ring_colour = "#ffa726"
+        glow_colour = "rgba(255,167,38,0.25)"
+    elif readiness_score >= 30:
+        ring_colour = "#ef5350"
+        glow_colour = "rgba(239,83,80,0.25)"
+    else:
+        ring_colour = "#b71c1c"
+        glow_colour = "rgba(183,28,28,0.25)"
+
+    if assessed_count == 0:
+        score_display = "—"
+        score_colour  = "#546e7a"
+        ring_colour   = "#2a3245"
+        glow_colour   = "transparent"
+        band_label    = "Awaiting input"
+        band_colour   = "#546e7a"
+    else:
+        score_display = str(readiness_score)
+        score_colour  = band_colour
+
+    st.markdown(
+        f"""
+        <div style="
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 18px 0 10px 0;
+        ">
+            <div style="
+                width: 96px; height: 96px;
+                border-radius: 50%;
+                border: 4px solid {ring_colour};
+                box-shadow: 0 0 18px {glow_colour};
+                background: #1e2535;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                margin-bottom: 10px;
+            ">
+                <span style="
+                    font-size: 1.9rem;
+                    font-weight: 800;
+                    color: {score_colour};
+                    line-height: 1;
+                ">{score_display}</span>
+                <span style="
+                    font-size: 0.65rem;
+                    color: #8ab4cc;
+                    letter-spacing: 0.5px;
+                    margin-top: 2px;
+                ">/ 100</span>
+            </div>
+            <span style="
+                font-size: 0.78rem;
+                font-weight: 700;
+                color: {band_colour};
+                letter-spacing: 0.4px;
+                text-transform: uppercase;
+            ">{band_label}</span>
+            <span style="
+                font-size: 0.68rem;
+                color: #546e7a;
+                margin-top: 3px;
+            ">Readiness Score</span>
+        </div>
+        <div style="
+            font-size: 0.67rem;
+            color: #37474f;
+            text-align: center;
+            margin-bottom: 14px;
+            line-height: 1.4;
+        ">
+           
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ── INITIATIVE TYPE BADGE ────────────────────────────────────────
+    profile_label = profile.get("label", "General Pharma AI")
+    profile_desc  = profile.get("description", "")
+    is_default    = profile.get("type") == "general"
+    badge_bg      = "#1e2535" if is_default else "#0d2340"
+    badge_border  = "#2a3245" if is_default else "#1565c0"
+    badge_colour  = "#546e7a" if is_default else "#4fc3f7"
+
+    st.markdown(
+        f"""
+        <div style="
+            background: {badge_bg};
+            border: 1px solid {badge_border};
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 14px;
+        ">
+            <div style="
+                font-size: 0.68rem;
+                color: #546e7a;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 4px;
+            ">Detected Initiative Type</div>
+            <div style="
+                font-size: 0.82rem;
+                font-weight: 700;
+                color: {badge_colour};
+                margin-bottom: 6px;
+            ">{profile_label}</div>
+            <div style="
+                font-size: 0.68rem;
+                color: #546e7a;
+                line-height: 1.45;
+            ">{profile_desc}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.markdown("<br>", unsafe_allow_html=True)
 
     for dim in DIMENSIONS:
@@ -330,7 +469,7 @@ with st.sidebar:
         )
 
     st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("🔄 Start New Diagnostic", use_container_width=True):
+    if st.button("Start New Diagnostic", use_container_width=True):
         st.session_state.graph_state = get_initial_state()
         st.session_state.chat_history = []
         st.rerun()
@@ -347,19 +486,19 @@ graph_state = st.session_state.graph_state
 
 if graph_state.get("diagnosis_complete", False):
     st.markdown(
-        '<div class="success-banner">✅ Full diagnostic complete — all 6 dimensions assessed</div>',
+        '<div class="success-banner">Full diagnostic complete — all 6 dimensions assessed</div>',
         unsafe_allow_html=True,
     )
     final_report = graph_state.get("final_report", "")
     if final_report:
-        with st.expander("📋 View Full Diagnostic Report", expanded=True):
+        with st.expander("View Full Diagnostic Report", expanded=True):
             st.markdown(
                 f'<div class="report-container">{final_report}</div>',
                 unsafe_allow_html=True,
             )
 
         st.download_button(
-            label="⬇️ Download Diagnostic Report",
+            label="Download Diagnostic Report",
             data=final_report,
             file_name="pharmaai_dx_report.md",
             mime="text/markdown",
