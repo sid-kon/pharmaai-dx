@@ -1,0 +1,13 @@
+streamlit
+langgraph>=0.2.0
+langchain
+langchain-anthropic
+langchain-pinecone
+pinecone
+python-dotenv
+sentence-transformers
+tiktoken
+pydantic
+requests
+trafilatura
+beautifulsoup4
