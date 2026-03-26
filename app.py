@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import streamlit as st
 from langchain_core.messages import HumanMessage
 import base64
@@ -25,13 +29,11 @@ st.markdown("""
 
     .stApp { background-color: #000000; }
 
-    /* Push main content below the 80px fixed bar + small gap */
     .block-container {
         padding-top: 96px !important;
         margin-top: 0 !important;
     }
 
-    /* Sidebar starts below the fixed bar, contents flush to top */
     [data-testid="stSidebar"] {
         background-color: #161b27;
         border-right: 1px solid #2a2f3e;
@@ -54,6 +56,40 @@ st.markdown("""
     [class*="Bottom"] {
         background-color: #161b27 !important;
         border-top: 1px solid #2a2f3e !important;
+    }
+
+    /* ── EXPANDER — matches chat bubble style ── */
+    [data-testid="stExpander"],
+    [data-testid="stExpander"] > div,
+    [data-testid="stExpander"] > div > div,
+    details[data-testid="stExpander"],
+    .streamlit-expanderHeader,
+    .streamlit-expanderContent {
+        background-color: #161b27 !important;
+        border: 1px solid #2a3245 !important;
+        border-radius: 10px !important;
+        color: #ffffff !important;
+    }
+    [data-testid="stExpander"] summary,
+    [data-testid="stExpander"] summary p,
+    [data-testid="stExpander"] summary span,
+    [data-testid="stExpander"] summary div,
+    .streamlit-expanderHeader p,
+    .streamlit-expanderHeader span {
+        background-color: #161b27 !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+        font-size: 1rem !important;
+    }
+    [data-testid="stExpander"] svg {
+        fill: #ffffff !important;
+        stroke: #ffffff !important;
+    }
+    /* Kill the white inner content area */
+    [data-testid="stExpander"] > details > div,
+    [data-testid="stExpanderDetails"] {
+        background-color: #161b27 !important;
+        border-top: 1px solid #2a3245 !important;
     }
 
     .dim-row {
@@ -216,6 +252,7 @@ def get_base64(img_path):
     except:
         return None
 
+
 img_base64 = get_base64("agilisium_logo.jpeg")
 
 logo_html = (
@@ -301,7 +338,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown(
         '<div style="color:#546e7a;font-size:0.75rem;">Powered by Agilisium Consulting'
-        '<br>Built on LangGraph + Claude</div>',
+        '<br>Built on LangGraph + Claude Sonnet 4.3</div>',
         unsafe_allow_html=True,
     )
 
@@ -320,6 +357,7 @@ if graph_state.get("diagnosis_complete", False):
                 f'<div class="report-container">{final_report}</div>',
                 unsafe_allow_html=True,
             )
+
         st.download_button(
             label="⬇️ Download Diagnostic Report",
             data=final_report,
