@@ -228,10 +228,30 @@ def _detect_initiative_type(initiative_description: str) -> dict:
     """
     Detect initiative profile via keyword matching (first match wins).
     Always returns a profile dict — never None.
+
+    Negation guard: if a keyword appears immediately after 'not', 'non-',
+    'no ', or 'without ' it is treated as a non-match to avoid false
+    positives like "not patient-facing" triggering patient_facing.
     """
+    import re
     text = initiative_description.lower()
+
+    def _keyword_present(kw: str, txt: str) -> bool:
+        """Return True only if kw appears and is not in a negated context."""
+        if kw not in txt:
+            return False
+        # Check each occurrence — if all are negated, treat as absent
+        for m in re.finditer(re.escape(kw), txt):
+            start = m.start()
+            # Look at up to 10 chars before the match for negation words
+            prefix = txt[max(0, start - 10):start]
+            if re.search(r'\b(not|non|no |without )\s*$', prefix):
+                continue  # this occurrence is negated
+            return True   # found at least one non-negated occurrence
+        return False
+
     for profile in INITIATIVE_PROFILES:
-        if any(kw in text for kw in profile["keywords"]):
+        if any(_keyword_present(kw, text) for kw in profile["keywords"]):
             return profile
     return DEFAULT_PROFILE
 
