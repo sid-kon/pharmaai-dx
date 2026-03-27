@@ -11,6 +11,101 @@ from agent.graph import pharmaai_graph, get_initial_state
 from agent.state import DIMENSIONS
 from scoring import calculate_readiness_score, get_score_band, get_initiative_profile
 
+# ---------------------------------------------------------------------------
+# Report renderer — injects coloured row highlights into the dimension table
+# ---------------------------------------------------------------------------
+
+def _render_report(markdown: str) -> str:
+    """
+    Convert the markdown diagnostic report into HTML, replacing the
+    plain dimension scores table with a colour-highlighted version.
+
+    Row colours (translucent):
+      Low    → green   rgba(67,160,71,0.15)  border #43a047
+      Medium → amber   rgba(255,143,0,0.15)  border #ff8f00
+      High   → red     rgba(255,68,68,0.15)  border #ff4444
+    """
+    import re
+
+    ROW_STYLES = {
+        "low":    ("rgba(67,160,71,0.15)",  "#43a047"),
+        "medium": ("rgba(255,143,0,0.15)",  "#ff8f00"),
+        "high":   ("rgba(255,68,68,0.15)",  "#ff4444"),
+    }
+
+    lines = markdown.split("\n")
+    out = []
+    in_table = False
+    table_buf = []
+
+    def flush_table(rows):
+        """Convert buffered markdown table rows to a styled HTML table."""
+        if not rows:
+            return ""
+        html = (
+            '<table style="width:100%;border-collapse:collapse;margin:12px 0;">'
+        )
+        for i, row in enumerate(rows):
+            cells = [c.strip() for c in row.strip().strip("|").split("|")]
+            if i == 0:
+                # Header row
+                html += "<thead><tr>"
+                for c in cells:
+                    html += (
+                        f'<th style="padding:10px 14px;text-align:left;'
+                        f'border-bottom:2px solid #2a3245;color:#8ab4cc;'
+                        f'font-size:0.85rem;font-weight:700;">{c}</th>'
+                    )
+                html += "</tr></thead><tbody>"
+            elif set(row.replace("|", "").replace("-", "").replace(":", "").strip()) == set():
+                # Separator row — skip
+                continue
+            else:
+                # Strip colour indicator emoji before processing
+                import re as _re
+                cells = [_re.sub(r'[🔴🟡🟢🟠⚪●]\s*', '', c).strip() for c in cells]
+                # Detect severity from second cell
+                sev_key = cells[1].lower() if len(cells) > 1 else ""
+                bg, border = ROW_STYLES.get(sev_key, ("transparent", "#2a3245"))
+                html += (
+                    f'<tr style="background:{bg};border-left:3px solid {border};'
+                    f'border-bottom:1px solid #2a3245;">'
+                )
+                for j, c in enumerate(cells):
+                    html += (
+                        f'<td style="padding:10px 14px;color:#ffffff;'
+                        f'font-size:0.84rem;vertical-align:top;">{c}</td>'
+                    )
+                html += "</tr>"
+        html += "</tbody></table>"
+        return html
+
+    for line in lines:
+        # Detect markdown table rows (start with |)
+        if line.strip().startswith("|"):
+            in_table = True
+            table_buf.append(line)
+        else:
+            if in_table:
+                out.append(flush_table(table_buf))
+                table_buf = []
+                in_table = False
+            # Strip colour indicator emoji from headings and body text
+            out.append(re.sub(r'[🔴🟡🟢🟠⚪●]\s*', '', line))
+
+    if in_table:
+        out.append(flush_table(table_buf))
+
+    # Join and convert remaining markdown (headings, paragraphs) to basic HTML
+    import markdown as md_lib
+    try:
+        body = md_lib.markdown("\n".join(out), extensions=["tables"])
+    except ImportError:
+        # Fallback: return joined lines without table conversion
+        body = "<br>".join(out)
+
+    return body
+
 try:
     _page_icon = Image.open("agilisium_logo.jpeg")
 except Exception:
@@ -246,10 +341,10 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
 SEVERITY_BADGE = {
-    "High":         ("🔴", "badge-high",    "HIGH"),
-    "Medium":       ("🟡", "badge-medium",  "MEDIUM"),
-    "Low":          ("🟢", "badge-low",     "LOW"),
-    "Not assessed": ("⚪", "badge-pending", "PENDING"),
+    "High":         ("", "badge-high",    "HIGH"),
+    "Medium":       ("", "badge-medium",  "MEDIUM"),
+    "Low":          ("", "badge-low",     "LOW"),
+    "Not assessed": ("", "badge-pending", "PENDING"),
 }
 
 def get_base64(img_path):
@@ -464,7 +559,7 @@ with st.sidebar:
         icon, badge_class, label = SEVERITY_BADGE.get(severity, SEVERITY_BADGE["Not assessed"])
         st.markdown(
             f'<div class="dim-row"><span class="dim-name">{dim}</span>'
-            f'<span class="badge {badge_class}">{icon} {label}</span></div>',
+            f'<span class="badge {badge_class}">{label}</span></div>',
             unsafe_allow_html=True,
         )
 
@@ -493,7 +588,7 @@ if graph_state.get("diagnosis_complete", False):
     if final_report:
         with st.expander("View Full Diagnostic Report", expanded=True):
             st.markdown(
-                f'<div class="report-container">{final_report}</div>',
+                f'<div class="report-container">{_render_report(final_report)}</div>',
                 unsafe_allow_html=True,
             )
 
