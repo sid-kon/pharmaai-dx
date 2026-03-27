@@ -11,3 +11,5 @@ pydantic
 requests
 trafilatura
 beautifulsoup4
+markdown
+torchvision
